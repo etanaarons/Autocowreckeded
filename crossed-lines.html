@@ -1,0 +1,900 @@
+<title>Autocowrecked</title>
+<style>
+/* Autocowrecked — a party chat where every transmission comes out wrong.
+   Deliberate single-world look: a CB-radio / oscilloscope night-shift desk.
+   Palette and contrast are chosen and painted explicitly, on purpose,
+   regardless of host theme (see artifact-design: committed single theme). */
+:root{
+  --bg:#0a0d0b;
+  --bg-panel:#111613;
+  --surface:#171e19;
+  --surface-2:#1d2620;
+  --border:#293529;
+  --border-soft:#20291f;
+  --text:#e8f2ea;
+  --text-dim:#8ba397;
+  --text-faint:#5d7267;
+  --accent:#5eeb8f;
+  --accent-strong:#39d873;
+  --accent-dim:#2a5c40;
+  --warn:#ffb648;
+  --warn-dim:#5c4622;
+  --other:#6fd3ff;
+  --danger:#ff6b6b;
+  --danger-dim:#5c2c2c;
+  --shadow: 0 10px 30px -12px rgba(0,0,0,.6);
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --sans: "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif;
+}
+*{box-sizing:border-box;}
+html,body{height:100%;}
+body{
+  margin:0;
+  background:
+    radial-gradient(1200px 800px at 15% -10%, #10251a 0%, transparent 55%),
+    radial-gradient(900px 700px at 110% 10%, #1a1230 0%, transparent 50%),
+    var(--bg);
+  color:var(--text);
+  font-family:var(--sans);
+  min-height:100vh;
+  -webkit-font-smoothing:antialiased;
+}
+::selection{background:var(--accent-dim); color:var(--text);}
+button, input, textarea{font-family:inherit; color:inherit;}
+button{cursor:pointer;}
+button:focus-visible, input:focus-visible, textarea:focus-visible{
+  outline:2px solid var(--accent); outline-offset:2px;
+}
+[hidden]{display:none!important;}
+a{color:var(--accent);}
+
+.scanlines{
+  position:fixed; inset:0; pointer-events:none; z-index:50; opacity:.05;
+  background:repeating-linear-gradient(0deg, #fff 0px, transparent 1px, transparent 3px);
+  mix-blend-mode:overlay;
+}
+
+/* ---------- Join screen ---------- */
+#view-join{
+  min-height:100vh; display:flex; align-items:center; justify-content:center;
+  padding:32px 20px;
+}
+.join-card{
+  width:100%; max-width:460px;
+  background:var(--bg-panel);
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:32px 28px 28px;
+  box-shadow:var(--shadow);
+  position:relative;
+  overflow:hidden;
+}
+.join-card::before{
+  content:"";
+  position:absolute; inset:0 0 auto 0; height:3px;
+  background:linear-gradient(90deg, var(--accent), var(--other), var(--warn), var(--accent));
+  background-size:200% 100%;
+  animation:sweep 5s linear infinite;
+}
+@keyframes sweep{ to{ background-position:200% 0; } }
+.brand{ display:flex; align-items:center; gap:10px; margin-bottom:4px;}
+.brand-mark{
+  width:34px; height:34px; border-radius:8px;
+  background:var(--surface-2); border:1px solid var(--border);
+  display:flex; align-items:center; justify-content:center; font-size:18px;
+}
+.brand-name{ font-family:var(--mono); font-weight:600; letter-spacing:.04em; font-size:14px; color:var(--text-dim); text-transform:uppercase;}
+h1.join-title{
+  font-family:var(--mono); font-size:30px; margin:14px 0 6px; letter-spacing:-.01em;
+  text-wrap:balance;
+}
+h1.join-title span{color:var(--accent);}
+.join-sub{ color:var(--text-dim); margin:0 0 24px; font-size:14.5px; line-height:1.5; max-width:38ch;}
+
+.field{ margin-bottom:16px; }
+.field label{
+  display:block; font-family:var(--mono); font-size:11px; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--text-faint); margin-bottom:6px;
+}
+.field input{
+  width:100%; background:var(--surface); border:1px solid var(--border);
+  border-radius:8px; padding:11px 12px; font-size:15px; color:var(--text);
+}
+.field input:focus{ border-color:var(--accent-dim); }
+.field-row{ display:flex; gap:10px; }
+.field-row .field{ flex:1; }
+
+.avatar-picker{
+  display:flex; align-items:center; gap:12px;
+  background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:10px 12px;
+  margin-bottom:16px;
+}
+.avatar-bubble{
+  width:46px; height:46px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+  font-size:22px; flex:none; border:2px solid var(--ring, var(--accent)); background:var(--surface-2);
+}
+.avatar-meta{ flex:1; min-width:0; }
+.avatar-meta .callsign{ font-family:var(--mono); font-size:12px; color:var(--text-dim); }
+.avatar-meta .callsign b{ color:var(--ring, var(--accent)); font-weight:600; }
+.shuffle-btn{
+  background:var(--surface-2); border:1px solid var(--border); border-radius:7px;
+  padding:8px 10px; font-size:13px; color:var(--text-dim); display:flex; align-items:center; gap:6px;
+  white-space:nowrap;
+}
+.shuffle-btn:hover{ color:var(--text); border-color:var(--accent-dim); }
+
+.room-toggle{ display:flex; gap:8px; margin-bottom:14px; }
+.room-toggle button{
+  flex:1; background:var(--surface); border:1px solid var(--border); border-radius:8px;
+  padding:9px; font-family:var(--mono); font-size:12px; letter-spacing:.04em; text-transform:uppercase;
+  color:var(--text-dim);
+}
+.room-toggle button.active{ border-color:var(--accent); color:var(--accent); background:rgba(94,235,143,.08); }
+
+.join-btn{
+  width:100%; padding:13px; border:none; border-radius:9px; margin-top:6px;
+  background:var(--accent-strong); color:#06170e; font-weight:700; font-size:15px;
+  font-family:var(--mono); letter-spacing:.02em; text-transform:uppercase;
+  box-shadow:0 8px 20px -8px rgba(57,216,115,.5);
+}
+.join-btn:hover{ background:var(--accent); }
+.join-btn:disabled{ opacity:.5; cursor:not-allowed; box-shadow:none; }
+.join-hint{ margin-top:12px; font-size:12px; color:var(--text-faint); text-align:center; }
+
+/* ---------- Room screen ---------- */
+#view-room{ min-height:100vh; display:flex; flex-direction:column; }
+.topbar{
+  display:flex; align-items:center; gap:14px; padding:12px 18px;
+  border-bottom:1px solid var(--border); background:var(--bg-panel);
+  position:sticky; top:0; z-index:10;
+}
+.topbar .room-id{
+  font-family:var(--mono); font-size:13px; background:var(--surface); border:1px solid var(--border);
+  padding:7px 10px; border-radius:7px; display:flex; align-items:center; gap:8px; color:var(--text-dim);
+}
+.topbar .room-id b{ color:var(--accent); letter-spacing:.05em; }
+.copy-btn{ background:none; border:none; color:var(--text-faint); padding:2px; }
+.copy-btn:hover{ color:var(--accent); }
+.distortion-wrap{ flex:1; display:flex; align-items:center; gap:10px; min-width:120px; max-width:260px; }
+.distortion-label{ font-family:var(--mono); font-size:10px; letter-spacing:.08em; color:var(--text-faint); text-transform:uppercase; white-space:nowrap; }
+.distortion-bar{ flex:1; height:6px; border-radius:4px; background:var(--surface); border:1px solid var(--border); overflow:hidden; }
+.distortion-fill{ height:100%; background:linear-gradient(90deg, var(--accent-strong), var(--warn)); transition:width .6s ease; }
+.distortion-pct{ font-family:var(--mono); font-size:12px; color:var(--warn); min-width:34px; text-align:right; }
+.member-strip{ display:flex; align-items:center; }
+.member-strip .mini-avatar{
+  width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+  font-size:14px; background:var(--surface-2); border:2px solid var(--bg-panel); margin-left:-8px; position:relative;
+}
+.member-strip .mini-avatar:first-child{ margin-left:0; }
+.member-count{ font-family:var(--mono); font-size:12px; color:var(--text-dim); margin-left:6px; }
+.drawer-toggle{
+  display:none; background:var(--surface); border:1px solid var(--border); border-radius:7px; padding:7px 9px; color:var(--text-dim);
+}
+.leave-btn{
+  background:var(--surface); border:1px solid var(--border); color:var(--text-dim);
+  border-radius:7px; padding:7px 11px; font-size:12.5px; font-family:var(--mono); letter-spacing:.03em;
+}
+.leave-btn:hover{ color:var(--danger); border-color:var(--danger-dim); }
+
+.room-body{ flex:1; display:flex; min-height:0; }
+.sidebar{
+  width:230px; flex:none; border-right:1px solid var(--border); background:var(--bg-panel);
+  padding:16px; overflow-y:auto;
+}
+.sidebar h2{
+  font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--text-faint);
+  margin:0 0 10px;
+}
+.roster{ display:flex; flex-direction:column; gap:8px; }
+.roster-row{
+  display:flex; align-items:center; gap:9px; padding:8px; border-radius:8px; background:var(--surface);
+  border:1px solid var(--border-soft);
+}
+.roster-row .mini-avatar{
+  width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+  font-size:16px; background:var(--surface-2); flex:none; border:2px solid var(--ring, var(--border));
+  position:relative;
+}
+.online-dot{
+  position:absolute; bottom:-1px; right:-1px; width:9px; height:9px; border-radius:50%;
+  background:var(--text-faint); border:2px solid var(--bg-panel);
+}
+.online-dot.on{ background:var(--accent); }
+.roster-meta{ min-width:0; flex:1; }
+.roster-name{ font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.roster-title{ font-family:var(--mono); font-size:10px; color:var(--text-faint); letter-spacing:.03em; text-transform:uppercase; }
+.roster-count{ font-family:var(--mono); font-size:11px; color:var(--text-dim); flex:none; }
+
+.chat-col{ flex:1; display:flex; flex-direction:column; min-width:0; }
+.feed{
+  flex:1; overflow-y:auto; padding:20px 22px 10px; display:flex; flex-direction:column; gap:14px;
+}
+.feed-empty{ margin:auto; text-align:center; color:var(--text-faint); font-size:13.5px; max-width:32ch; line-height:1.6; }
+.msg{ max-width:640px; }
+.msg-head{ display:flex; align-items:baseline; gap:8px; margin-bottom:4px; flex-wrap:wrap; }
+.msg-avatar{
+  width:22px; height:22px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center;
+  font-size:12px; background:var(--surface-2); border:1px solid var(--border); margin-right:2px;
+}
+.msg-name{ font-weight:700; font-size:13.5px; }
+.msg-title{ font-family:var(--mono); font-size:9.5px; color:var(--text-faint); letter-spacing:.04em; text-transform:uppercase; }
+.msg-time{ font-family:var(--mono); font-size:10.5px; color:var(--text-faint); margin-left:auto; }
+.msg-tag{
+  font-family:var(--mono); font-size:9.5px; letter-spacing:.05em; padding:2px 6px; border-radius:4px;
+  text-transform:uppercase; border:1px solid var(--border);
+}
+.msg-body{
+  background:var(--surface); border:1px solid var(--border-soft); border-left:3px solid var(--ring, var(--accent));
+  border-radius:0 10px 10px 10px; padding:10px 13px;
+}
+.msg-meant{
+  font-size:11.5px; color:var(--text-faint); text-decoration:line-through; text-decoration-color:var(--danger-dim);
+  margin-bottom:4px; opacity:.75;
+}
+.msg-sent{ font-size:15.5px; line-height:1.45; word-wrap:break-word; }
+.msg.mine .msg-body{ background:rgba(94,235,143,.06); }
+
+.composer{
+  border-top:1px solid var(--border); background:var(--bg-panel); padding:14px 18px 16px;
+}
+.preview-panel{
+  display:flex; gap:12px; margin-bottom:10px;
+}
+.preview-box{
+  flex:1; min-width:0; background:var(--surface); border:1px solid var(--border-soft); border-radius:9px; padding:9px 12px;
+}
+.preview-box .pv-label{
+  font-family:var(--mono); font-size:9.5px; letter-spacing:.07em; text-transform:uppercase; color:var(--text-faint);
+  display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;
+}
+.preview-box.mine .pv-label{ color:var(--text-faint); }
+.preview-box.wrecked{ border-color:var(--warn-dim); }
+.preview-box.wrecked .pv-label{ color:var(--warn); }
+.pv-text{ font-size:14px; line-height:1.4; min-height:19px; word-wrap:break-word; }
+.pv-text.placeholder{ color:var(--text-faint); font-style:italic; }
+.reroll-btn{
+  flex:none; align-self:flex-end; background:var(--surface-2); border:1px solid var(--border); border-radius:8px;
+  padding:8px 12px; font-family:var(--mono); font-size:11.5px; color:var(--text-dim); height:fit-content;
+}
+.reroll-btn:hover{ color:var(--warn); border-color:var(--warn-dim); }
+.compose-row{ display:flex; gap:10px; align-items:flex-end; }
+.compose-row textarea{
+  flex:1; resize:none; background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  padding:11px 13px; font-size:15px; line-height:1.4; min-height:46px; max-height:120px;
+}
+.compose-row textarea:focus{ border-color:var(--accent-dim); }
+.send-btn{
+  flex:none; background:var(--accent-strong); color:#06170e; border:none; border-radius:10px;
+  padding:0 18px; height:46px; font-weight:700; font-family:var(--mono); font-size:13px; letter-spacing:.03em;
+  text-transform:uppercase;
+}
+.send-btn:hover{ background:var(--accent); }
+.send-btn:disabled{ opacity:.4; cursor:not-allowed; }
+.offline-banner{
+  font-family:var(--mono); font-size:11.5px; color:var(--warn); background:var(--warn-dim);
+  border:1px solid #6b4d1f; border-radius:8px; padding:7px 12px; margin-bottom:10px; text-align:center;
+}
+
+/* mobile */
+@media (max-width:760px){
+  .sidebar{
+    position:fixed; left:0; top:53px; bottom:0; z-index:20; transform:translateX(-100%);
+    transition:transform .25s ease; box-shadow:var(--shadow); width:78vw; max-width:280px;
+  }
+  .sidebar.open{ transform:translateX(0); }
+  .drawer-toggle{ display:inline-flex; align-items:center; }
+  .distortion-wrap{ display:none; }
+  .join-card{ padding:26px 20px 22px; }
+}
+</style>
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+
+<div class="scanlines"></div>
+
+<!-- ================= JOIN SCREEN ================= -->
+<div id="view-join">
+  <div class="join-card">
+    <div class="brand">
+      <div class="brand-mark">📻</div>
+      <div class="brand-name">Autocowrecked</div>
+    </div>
+    <h1 class="join-title">Say it clean.<br>It arrives <span>wrong</span>.</h1>
+    <p class="join-sub">Join a frequency with friends. Every line you transmit gets crossed with static before anyone hears it — you included.</p>
+
+    <div class="avatar-picker">
+      <div class="avatar-bubble" id="avatarBubble">🐮</div>
+      <div class="avatar-meta">
+        <div class="callsign">CALL SIGN<br><b id="callsignText">Agent Cow</b></div>
+      </div>
+      <button class="shuffle-btn" id="shuffleBtn" type="button">🎲 Shuffle</button>
+    </div>
+
+    <div class="field">
+      <label for="nameInput">Your name</label>
+      <input id="nameInput" maxlength="20" placeholder="What do we call you?" />
+    </div>
+
+    <div class="room-toggle">
+      <button type="button" class="active" id="tabJoin">Join a frequency</button>
+      <button type="button" id="tabCreate">Start a new one</button>
+    </div>
+
+    <div class="field" id="codeField">
+      <label for="codeInput">Frequency code</label>
+      <input id="codeInput" maxlength="12" placeholder="e.g. WAFFLE7" style="text-transform:uppercase" />
+    </div>
+
+    <button class="join-btn" id="enterBtn" type="button">Go live</button>
+    <p class="join-hint" id="joinHint">Share the code so others can tune in to the same room.</p>
+  </div>
+</div>
+
+<!-- ================= ROOM SCREEN ================= -->
+<div id="view-room" hidden>
+  <div class="topbar">
+    <button class="drawer-toggle" id="drawerToggle" type="button">☰</button>
+    <div class="room-id">
+      <span>FREQ</span> <b id="roomCodeLabel">—</b>
+      <button class="copy-btn" id="copyBtn" title="Copy invite">⧉</button>
+    </div>
+    <div class="distortion-wrap">
+      <span class="distortion-label">Static</span>
+      <div class="distortion-bar"><div class="distortion-fill" id="distortionFill" style="width:40%"></div></div>
+      <span class="distortion-pct" id="distortionPct">40%</span>
+    </div>
+    <div class="member-strip" id="memberStrip"></div>
+    <span class="member-count" id="memberCount">1 online</span>
+    <button class="leave-btn" id="leaveBtn" type="button">Leave</button>
+  </div>
+
+  <div class="room-body">
+    <aside class="sidebar" id="sidebar">
+      <h2>On this line</h2>
+      <div class="roster" id="roster"></div>
+    </aside>
+
+    <main class="chat-col">
+      <div class="feed" id="feed">
+        <div class="feed-empty" id="feedEmpty">Nobody's said anything yet. Type something normal below — see what comes out.</div>
+      </div>
+
+      <div class="composer">
+        <div class="offline-banner" id="offlineBanner" hidden>Multiplayer link unavailable in this preview — running solo, local-only.</div>
+        <div class="preview-panel">
+          <div class="preview-box mine">
+            <div class="pv-label">What you actually meant</div>
+            <div class="pv-text placeholder" id="pvMeant">Type below to see it here…</div>
+          </div>
+          <div class="preview-box wrecked">
+            <div class="pv-label"><span>What's about to transmit</span><span id="pvTag"></span></div>
+            <div class="pv-text placeholder" id="pvSent">…and here's what everyone actually gets.</div>
+          </div>
+          <button class="reroll-btn" id="rerollBtn" type="button" title="Roll different static">🎛 Reroll</button>
+        </div>
+        <div class="compose-row">
+          <textarea id="composeInput" rows="1" placeholder="Type your message…" maxlength="240"></textarea>
+          <button class="send-btn" id="sendBtn" type="button" disabled>Transmit</button>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------------- word bank ---------------- */
+var DICTIONARY = {
+  hi:"hog", hello:"jello", hey:"hex", yo:"yolk", sup:"soup",
+  yes:"yeast", yeah:"yodel", no:"gnome", nope:"nacho", ok:"orc", okay:"otter",
+  please:"pigeon", thanks:"thumbs", thank:"tank", sorry:"celery", welcome:"walrus",
+  bye:"brie", goodbye:"goldfish", later:"ladder",
+  i:"eye", im:"yam", my:"moo", me:"mud", mine:"mime",
+  we:"whee", us:"udder", our:"otter", you:"yew", your:"yarn", youre:"yodeled",
+  they:"thigh", them:"turnip", their:"toaster", he:"hedge", she:"shed", it:"yeti",
+  are:"bleeding", is:"itches", am:"ham", was:"wasp", were:"weird", be:"bee", been:"bean",
+  the:"thee", a:"an", an:"axe", and:"anchovy", but:"butter", or:"oar", not:"gnat",
+  can:"cannoli", cant:"cantaloupe", will:"whale", would:"waffle", could:"compost", should:"shovel",
+  what:"walnut", when:"wren", where:"wheelbarrow", why:"whisk", how:"howl", who:"whoopie",
+  this:"thistle", that:"tuba", there:"tarantula", here:"hearse",
+  good:"gourd", bad:"badger", great:"grapefruit", nice:"gneiss", cool:"kelp", awesome:"awful",
+  love:"lava", like:"lichen", hate:"haggis", want:"wombat", need:"gnocchi",
+  go:"gopher", going:"gargling", come:"comet", coming:"combusting",
+  see:"sea", look:"loofah", know:"gnome", think:"tinsel", feel:"felt",
+  say:"slay", said:"salad", tell:"taco", told:"toad", ask:"asparagus", asked:"astonished",
+  get:"goat", got:"gopher", give:"gibbon", gave:"gravy", make:"macaroni", made:"maggot",
+  do:"dodo", did:"ditto", done:"donut", have:"halibut", has:"hasp", had:"hadron",
+  meet:"meatloaf", meeting:"bleeding", cafe:"buffet", coffee:"toffee", lunch:"launch",
+  dinner:"dinosaur", breakfast:"beefcast", food:"fungus", eat:"eel", eating:"echoing",
+  drink:"drain", drinking:"drowning", work:"worm", working:"wormhole", home:"hive",
+  school:"scoundrel", party:"parsley", game:"gnome", play:"plague", playing:"plaguing",
+  buy:"buoy", bought:"borscht", sell:"snail", sold:"soldier", money:"monkey", time:"thyme",
+  day:"decoy", night:"gnat", morning:"mourning", afternoon:"aftertaste", evening:"eavesdropping",
+  weekend:"weakened", today:"toad-day", tomorrow:"tumor", yesterday:"yeastyday",
+  now:"gnaw", later:"latex", soon:"swoon", never:"nectar", always:"almonds",
+  sometimes:"somersaults", maybe:"gravy", sure:"sewer", really:"radish", very:"vermin",
+  so:"soy", just:"jousting", only:"onion", also:"aloha", too:"toenail", still:"stilts",
+  again:"aardvark", one:"onion", two:"tuna", three:"threat", first:"ferret", last:"lasagna",
+  new:"gnu", old:"olive", big:"bagpipe", small:"smallpox", fast:"fasting", slow:"sloth",
+  happy:"hippo", sad:"sardine", angry:"anchovy", tired:"tarantula", hungry:"hyena", busy:"biscuit",
+  free:"freeze", dog:"dogma", cat:"catfish", car:"carp", house:"hummus", phone:"pheasant",
+  computer:"compost-heap", internet:"interpretive-dance", wifi:"walrus-fizz", music:"mucus",
+  movie:"moose-vie", book:"boot", water:"otter", tea:"teal", beer:"beaver", pizza:"piranha",
+  burger:"badger", grocery:"gremlin", snacks:"snakes", store:"stork", shop:"shrimp",
+  shopping:"shrieking", walk:"walrus", walking:"waltzing", run:"raccoon", running:"rummaging",
+  sleep:"sleet", sleeping:"sleeting", wake:"walnut", woke:"wombat", up:"upholstery", down:"doughnut",
+  help:"kelp", stop:"stapler", wait:"waffle", listen:"lichen", watch:"walrus", watching:"waltzing",
+  send:"sediment", sent:"cement", message:"massage", text:"tux", call:"cauldron", calling:"cauldroning",
+  room:"raccoon", chat:"chowder", talk:"tusk", talking:"tuskless", speak:"squeak", speaking:"squeaking",
+  pass:"pastry", aux:"ox", cable:"gerbil", noisy:"nosy", cord:"corn", plug:"plum",
+  friend:"fondue", friends:"fondues", family:"flamingo", boss:"moth", team:"turtle",
+  today:"toad-day", tonight:"tonsil", tomorrow:"tumor", please:"pigeon"
+};
+
+var FALLBACK_WORDS = ["gremlin","waffle","turnip","goblin","biscuit","raccoon","spreadsheet",
+  "cactus","walrus","kazoo","toenail","gravy","lint","possum","hamster","gerbil","tuba",
+  "compost","noodle","haggis","static","moth","yeti","pickle","goose","llama","biscuit"];
+
+var STORMS = ["*static crackles*","*sobs uncontrollably*","*channel hisses*","*feedback squeals*",
+  "(transmission garbled)","*modem screams*","*the line hums*","*somewhere, a goose honks*"];
+
+var TAGS = [
+  {t:"CLEAN-ISH", w:3},
+  {t:"LINE NOISE", w:5},
+  {t:"CROSSED SIGNAL", w:5},
+  {t:"STATIC BURST", w:4},
+  {t:"FULL STATIC", w:2},
+  {t:"CRITICAL GARBLE", w:1}
+];
+
+var MENACE_TITLES = ["Spelling Menace","Syntax Saboteur","Grammar Gremlin","Diction Deviant",
+  "Vowel Vandal","Punctuation Pirate","Phoneme Phantom","Autocorrect Agent","Static Spirit",
+  "Consonant Criminal","Rogue Homophone","Semantic Smuggler"];
+
+var CALLSIGNS = [
+  {emoji:"🐮", name:"Agent Cow"}, {emoji:"🦉", name:"Glitch Owl"}, {emoji:"🐺", name:"Static Wolf"},
+  {emoji:"🦝", name:"Rogue Raccoon"}, {emoji:"🐸", name:"Feedback Frog"}, {emoji:"🦊", name:"Crossed Fox"},
+  {emoji:"🐙", name:"Tangled Squid"}, {emoji:"🐝", name:"Buzzkill Bee"}, {emoji:"🦔", name:"Prickly Pixel"},
+  {emoji:"🐧", name:"Frozen Signal"}, {emoji:"🐲", name:"Garble Drake"}, {emoji:"🦖", name:"Rex Interference"},
+  {emoji:"🐨", name:"Muffled Koala"}, {emoji:"🦫", name:"Dam Static"}, {emoji:"🐰", name:"Twitchy Hare"}
+];
+
+var COLORS = ["#5eeb8f","#6fd3ff","#ffb648","#ff8fb0","#c39bff","#ffdd66","#7ee0c9","#ff8f6b"];
+
+/* ---------------- tiny seeded RNG ---------------- */
+function hashStr(s){ var h=0; for(var i=0;i<s.length;i++){ h=(h*31 + s.charCodeAt(i))|0; } return h>>>0; }
+function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; var t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+
+function pickWeighted(list, rng){
+  var total=0; for(var i=0;i<list.length;i++) total+=list[i].w;
+  var r=rng()*total;
+  for(i=0;i<list.length;i++){ if(r<list[i].w) return list[i].t; r-=list[i].w; }
+  return list[list.length-1].t;
+}
+function pick(arr, rng){ return arr[Math.floor(rng()*arr.length)]; }
+
+function matchCase(src, repl){
+  if(src === src.toUpperCase() && src !== src.toLowerCase()) return repl.toUpperCase();
+  if(src[0] === src[0].toUpperCase()) return repl.charAt(0).toUpperCase()+repl.slice(1);
+  return repl;
+}
+
+function mutateWord(word, rng){
+  var lower = word.toLowerCase();
+  if(DICTIONARY[lower] && rng() < 0.88){
+    return matchCase(word, DICTIONARY[lower]);
+  }
+  if(word.length <= 2 || rng() < 0.3){
+    return matchCase(word, pick(FALLBACK_WORDS, rng));
+  }
+  // letter-level static: swap, double, or vowel-flip
+  var chars = word.split("");
+  var move = Math.floor(rng()*4);
+  if(move === 0 && chars.length > 3){
+    var i = 1 + Math.floor(rng()*(chars.length-2));
+    var tmp = chars[i]; chars[i]=chars[i+1]; chars[i+1]=tmp;
+  } else if(move === 1){
+    var vowels = "aeiou"; var vmap = {a:"e",e:"o",i:"u",o:"a",u:"i"};
+    for(var k=0;k<chars.length;k++){
+      var lc = chars[k].toLowerCase();
+      if(vmap[lc]){ chars[k] = chars[k]===lc ? vmap[lc] : vmap[lc].toUpperCase(); break; }
+    }
+  } else if(move === 2){
+    var j = Math.floor(rng()*chars.length);
+    chars.splice(j,0,chars[j]);
+  } else {
+    var j2 = Math.floor(rng()*chars.length);
+    chars.splice(j2,1);
+  }
+  return chars.join("") || word;
+}
+
+/* corrupt(text, seed) -> {sent, tag} — deterministic per (text, seed) */
+function corrupt(text, seed){
+  var rng = mulberry32(seed >>> 0);
+  var tokens = text.split(/(\s+)/);
+  var words = [];
+  var out = tokens.map(function(tok){
+    if(/^[A-Za-z']+$/.test(tok)){
+      words.push(tok);
+      return mutateWord(tok, rng);
+    }
+    if(/^[.?!,]+$/.test(tok) && rng() < 0.3){
+      return tok + (rng()<0.5 ? "?!" : "..");
+    }
+    return tok;
+  });
+
+  // occasional adjacent word swap for extra chaos
+  if(words.length > 3 && rng() < 0.14){
+    var idxs = [];
+    for(var i=0;i<out.length;i++) if(/^[A-Za-z']+$/.test(out[i])) idxs.push(i);
+    if(idxs.length > 2){
+      var a = idxs[Math.floor(rng()*(idxs.length-1))];
+      var bpos = idxs.indexOf(a)+1;
+      var b = idxs[bpos];
+      var t = out[a]; out[a]=out[b]; out[b]=t;
+    }
+  }
+
+  var sent = out.join("");
+
+  // rare full caps shout
+  if(rng() < 0.1){
+    sent = sent.toUpperCase();
+  } else if(rng() < 0.18){
+    // caps a short run of words
+    var pieces = sent.split(" ");
+    var start = Math.floor(rng()*pieces.length);
+    var len = 1 + Math.floor(rng()*2);
+    for(var p=start;p<Math.min(pieces.length,start+len);p++) pieces[p]=pieces[p].toUpperCase();
+    sent = pieces.join(" ");
+  }
+
+  if(rng() < 0.16){ sent += " " + pick(STORMS, rng); }
+
+  var tag = pickWeighted(TAGS, rng);
+  return {sent: sent, tag: tag};
+}
+
+/* ---------------- state ---------------- */
+var LS_KEY = "crossed-lines-profile-v1";
+var profile = null;
+try{ profile = JSON.parse(localStorage.getItem(LS_KEY) || "null"); }catch(e){}
+
+var els = {};
+["avatarBubble","callsignText","shuffleBtn","nameInput","tabJoin","tabCreate","codeField",
+ "codeInput","enterBtn","joinHint","roomCodeLabel","copyBtn","distortionFill","distortionPct",
+ "memberStrip","memberCount","leaveBtn","sidebar","roster","feed","feedEmpty","offlineBanner",
+ "pvMeant","pvSent","pvTag","rerollBtn","composeInput","sendBtn","drawerToggle"
+].forEach(function(id){ els[id] = document.getElementById(id); });
+
+var viewJoin = document.getElementById("view-join");
+var viewRoom = document.getElementById("view-room");
+
+var draft = { emoji:"🐮", name:"Agent Cow", color: COLORS[0], menaceTitle: pick(MENACE_TITLES, Math.random) };
+var mode = "join"; // "join" | "create"
+
+function randomCallsign(){
+  var cs = CALLSIGNS[Math.floor(Math.random()*CALLSIGNS.length)];
+  var color = COLORS[Math.floor(Math.random()*COLORS.length)];
+  var title = MENACE_TITLES[Math.floor(Math.random()*MENACE_TITLES.length)];
+  return {emoji: cs.emoji, name: cs.name, color: color, menaceTitle: title};
+}
+
+function paintAvatarPicker(){
+  els.avatarBubble.textContent = draft.emoji;
+  els.avatarBubble.style.setProperty("--ring", draft.color);
+  els.avatarBubble.style.borderColor = draft.color;
+  els.callsignText.textContent = draft.name;
+  els.callsignText.style.color = draft.color;
+}
+
+function initJoinForm(){
+  var base = randomCallsign();
+  if(profile){
+    draft.emoji = profile.emoji || base.emoji;
+    draft.name = profile.name || base.name;
+    draft.color = profile.color || base.color;
+    draft.menaceTitle = profile.menaceTitle || base.menaceTitle;
+    els.nameInput.value = profile.name || "";
+    if(profile.roomCode) els.codeInput.value = profile.roomCode;
+  } else {
+    draft = base;
+  }
+  paintAvatarPicker();
+}
+initJoinForm();
+
+els.shuffleBtn.addEventListener("click", function(){
+  var cs = randomCallsign();
+  draft.emoji = cs.emoji; draft.color = cs.color; draft.menaceTitle = cs.menaceTitle;
+  if(!els.nameInput.value.trim()) draft.name = cs.name;
+  paintAvatarPicker();
+});
+
+function setMode(m){
+  mode = m;
+  els.tabJoin.classList.toggle("active", m==="join");
+  els.tabCreate.classList.toggle("active", m==="create");
+  els.codeField.hidden = false;
+  els.codeInput.placeholder = m==="create" ? "auto-generated (or type your own)" : "e.g. WAFFLE7";
+  els.joinHint.textContent = m==="create"
+    ? "Anyone with this code can tune in."
+    : "Share the code so others can tune in to the same room.";
+  els.enterBtn.textContent = m==="create" ? "Start frequency" : "Go live";
+}
+els.tabJoin.addEventListener("click", function(){ setMode("join"); });
+els.tabCreate.addEventListener("click", function(){
+  setMode("create");
+  if(!els.codeInput.value.trim()) els.codeInput.value = genCode();
+});
+
+function genCode(){
+  var words = ["WAFFLE","GREMLIN","STATIC","BISCUIT","TURNIP","KAZOO","GOOSE","PICKLE","YETI","NOODLE"];
+  return pick(words, Math.random) + (10 + Math.floor(Math.random()*89));
+}
+
+els.enterBtn.addEventListener("click", function(){
+  var name = els.nameInput.value.trim() || draft.name;
+  var code = (els.codeInput.value.trim() || genCode()).toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,12);
+  if(!code){ els.joinHint.textContent = "Type or generate a frequency code first."; return; }
+  draft.name = name;
+  profile = {
+    memberId: (profile && profile.memberId) || ("m" + Math.random().toString(36).slice(2,10)),
+    name: name, emoji: draft.emoji, color: draft.color, menaceTitle: draft.menaceTitle, roomCode: code
+  };
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(profile)); }catch(e){}
+  enterRoom(code);
+});
+
+/* ---------------- room runtime ---------------- */
+var db = null;
+var dbReady = (async function(){
+  try{
+    if(window.claude && window.claude.use){ db = await window.claude.use("db"); }
+  }catch(e){ db = null; }
+  return db;
+})();
+
+var localMessages = [];
+var localMembers = {};
+var unsubMsgs = null, unsubMembers = null;
+var heartbeatTimer = null;
+var currentSeed = (Math.random()*1e9)|0;
+var sidebarOpen = false;
+var nearBottom = true;
+
+function esc(s){
+  var d = document.createElement("div"); d.textContent = s; return d.innerHTML;
+}
+
+function timeLabel(ts){
+  var d = new Date(ts);
+  var h = d.getHours(), m = d.getMinutes();
+  var ap = h>=12 ? "PM":"AM"; h = h%12; if(h===0) h=12;
+  return h+":"+(m<10?"0":"")+m+" "+ap;
+}
+
+async function enterRoom(code){
+  viewJoin.hidden = true; viewRoom.hidden = false;
+  els.roomCodeLabel.textContent = code;
+  document.title = "Autocowrecked — #" + code;
+
+  await dbReady;
+  if(!db){
+    els.offlineBanner.hidden = false;
+    localMembers[profile.memberId] = memberDoc();
+    renderRoster();
+    renderMembersStrip();
+    return;
+  }
+  els.offlineBanner.hidden = true;
+
+  var roomRef = db.doc("rooms/" + code);
+  var membersCol = roomRef.collection("members");
+  var messagesCol = roomRef.collection("messages");
+
+  try{ await roomRef.set({ lastActive: Date.now() }); }catch(e){}
+  try{
+    await membersCol.doc(profile.memberId).set(memberDoc());
+  }catch(e){}
+
+  if(heartbeatTimer) clearInterval(heartbeatTimer);
+  heartbeatTimer = setInterval(function(){
+    membersCol.doc(profile.memberId).update({ lastSeen: Date.now() }).catch(function(){});
+  }, 12000);
+
+  if(unsubMembers) unsubMembers();
+  unsubMembers = membersCol.onSnapshot(function(snap){
+    var map = {};
+    snap.docs.forEach(function(d){ if(d.exists) map[d.id] = d.data(); });
+    localMembers = map;
+    renderRoster();
+    renderMembersStrip();
+  }, function(){ /* degrade silently */ });
+
+  if(unsubMsgs) unsubMsgs();
+  unsubMsgs = messagesCol.orderBy("ts","desc").limit(60).onSnapshot(function(snap){
+    var list = snap.docs.map(function(d){ return d.data(); }).filter(Boolean);
+    list.reverse();
+    localMessages = list;
+    renderFeed();
+    updateDistortion(list.length);
+  }, function(){ /* degrade silently */ });
+
+  window.__sendMessage = function(meant, sent, tag){
+    var msg = {
+      authorId: profile.memberId, name: profile.name, emoji: profile.emoji,
+      color: profile.color, menaceTitle: profile.menaceTitle,
+      meant: meant, sent: sent, tag: tag, ts: Date.now()
+    };
+    messagesCol.add(msg).catch(function(){});
+    if(Math.random() < 0.2) pruneOld(messagesCol);
+  };
+  window.__leaveRoom = function(){
+    membersCol.doc(profile.memberId).delete().catch(function(){});
+  };
+}
+
+function pruneOld(messagesCol){
+  messagesCol.orderBy("ts","asc").limit(81).get().then(function(snap){
+    if(snap.size === 81){
+      snap.docs.slice(0,20).forEach(function(d){ messagesCol.doc(d.id).delete().catch(function(){}); });
+    }
+  }).catch(function(){});
+}
+
+function memberDoc(){
+  return {
+    name: profile.name, emoji: profile.emoji, color: profile.color,
+    menaceTitle: profile.menaceTitle, joinedAt: Date.now(), lastSeen: Date.now()
+  };
+}
+
+function updateDistortion(n){
+  var pct = Math.min(99, Math.round(38 + n*1.1));
+  els.distortionFill.style.width = pct + "%";
+  els.distortionPct.textContent = pct + "%";
+}
+
+function renderMembersStrip(){
+  var ids = Object.keys(localMembers);
+  els.memberStrip.innerHTML = ids.slice(0,5).map(function(id){
+    var m = localMembers[id];
+    return '<div class="mini-avatar" style="border-color:'+m.color+'" title="'+esc(m.name)+'">'+m.emoji+'</div>';
+  }).join("");
+  var onlineCount = ids.filter(function(id){ return (Date.now() - (localMembers[id].lastSeen||0)) < 20000; }).length || ids.length;
+  els.memberCount.textContent = onlineCount + " online";
+}
+
+function renderRoster(){
+  var ids = Object.keys(localMembers);
+  var msgCounts = {};
+  localMessages.forEach(function(m){ msgCounts[m.authorId] = (msgCounts[m.authorId]||0)+1; });
+  ids.sort(function(a,b){
+    var onA = (Date.now()-(localMembers[a].lastSeen||0))<20000;
+    var onB = (Date.now()-(localMembers[b].lastSeen||0))<20000;
+    if(onA!==onB) return onA ? -1:1;
+    return (localMembers[a].joinedAt||0) - (localMembers[b].joinedAt||0);
+  });
+  els.roster.innerHTML = ids.map(function(id){
+    var m = localMembers[id];
+    var online = (Date.now()-(m.lastSeen||0))<20000;
+    return '<div class="roster-row">'+
+      '<div class="mini-avatar" style="--ring:'+m.color+'; border-color:'+m.color+'">'+m.emoji+
+        '<span class="online-dot '+(online?"on":"")+'"></span></div>'+
+      '<div class="roster-meta">'+
+        '<div class="roster-name">'+esc(m.name)+(id===profile.memberId?" (you)":"")+'</div>'+
+        '<div class="roster-title">'+esc(m.menaceTitle||"")+'</div>'+
+      '</div>'+
+      '<div class="roster-count">'+(msgCounts[id]||0)+'</div>'+
+    '</div>';
+  }).join("") || '<div style="color:var(--text-faint); font-size:12.5px;">Nobody here yet.</div>';
+}
+
+function renderFeed(){
+  els.feedEmpty.hidden = localMessages.length > 0;
+  var wasNearBottom = nearBottom;
+  els.feed.querySelectorAll(".msg").forEach(function(n){ n.remove(); });
+  localMessages.forEach(function(m){
+    var div = document.createElement("div");
+    div.className = "msg" + (m.authorId===profile.memberId ? " mine":"");
+    div.innerHTML =
+      '<div class="msg-head">'+
+        '<span class="msg-avatar" style="border-color:'+m.color+'">'+m.emoji+'</span>'+
+        '<span class="msg-name" style="color:'+m.color+'">'+esc(m.name)+'</span>'+
+        '<span class="msg-title">'+esc(m.menaceTitle||"")+'</span>'+
+        '<span class="msg-tag" style="color:'+m.color+'">'+esc(m.tag||"")+'</span>'+
+        '<span class="msg-time">'+timeLabel(m.ts)+'</span>'+
+      '</div>'+
+      '<div class="msg-body" style="--ring:'+m.color+'">'+
+        '<div class="msg-meant">meant: '+esc(m.meant)+'</div>'+
+        '<div class="msg-sent">'+esc(m.sent)+'</div>'+
+      '</div>';
+    els.feed.appendChild(div);
+  });
+  if(wasNearBottom){ els.feed.scrollTop = els.feed.scrollHeight; }
+}
+els.feed.addEventListener("scroll", function(){
+  nearBottom = (els.feed.scrollHeight - els.feed.scrollTop - els.feed.clientHeight) < 80;
+});
+
+/* live preview */
+function updatePreview(){
+  var text = els.composeInput.value;
+  if(!text.trim()){
+    els.pvMeant.textContent = "Type below to see it here…"; els.pvMeant.classList.add("placeholder");
+    els.pvSent.textContent = "…and here's what everyone actually gets."; els.pvSent.classList.add("placeholder");
+    els.pvTag.textContent = "";
+    els.sendBtn.disabled = true;
+    return;
+  }
+  els.pvMeant.classList.remove("placeholder");
+  els.pvSent.classList.remove("placeholder");
+  els.pvMeant.textContent = text;
+  var result = corrupt(text, currentSeed + hashStr(text));
+  els.pvSent.textContent = result.sent;
+  els.pvTag.textContent = result.tag;
+  els.sendBtn.disabled = false;
+}
+els.composeInput.addEventListener("input", function(){
+  els.composeInput.style.height = "auto";
+  els.composeInput.style.height = Math.min(120, els.composeInput.scrollHeight) + "px";
+  updatePreview();
+});
+els.rerollBtn.addEventListener("click", function(){
+  currentSeed = (Math.random()*1e9)|0;
+  updatePreview();
+});
+els.composeInput.addEventListener("keydown", function(e){
+  if(e.key === "Enter" && !e.shiftKey){ e.preventDefault(); doSend(); }
+});
+els.sendBtn.addEventListener("click", doSend);
+
+function doSend(){
+  var text = els.composeInput.value.trim();
+  if(!text) return;
+  var result = corrupt(text, currentSeed + hashStr(text));
+  if(window.__sendMessage){
+    window.__sendMessage(text, result.sent, result.tag);
+  } else if(!db){
+    localMessages.push({
+      authorId: profile.memberId, name: profile.name, emoji: profile.emoji, color: profile.color,
+      menaceTitle: profile.menaceTitle, meant: text, sent: result.sent, tag: result.tag, ts: Date.now()
+    });
+    renderFeed();
+    updateDistortion(localMessages.length);
+  }
+  els.composeInput.value = "";
+  els.composeInput.style.height = "auto";
+  currentSeed = (Math.random()*1e9)|0;
+  updatePreview();
+  els.composeInput.focus();
+}
+
+els.copyBtn.addEventListener("click", function(){
+  var code = els.roomCodeLabel.textContent;
+  if(navigator.clipboard){ navigator.clipboard.writeText(code).catch(function(){}); }
+});
+
+els.leaveBtn.addEventListener("click", function(){
+  if(window.__leaveRoom) window.__leaveRoom();
+  if(unsubMsgs) unsubMsgs();
+  if(unsubMembers) unsubMembers();
+  if(heartbeatTimer) clearInterval(heartbeatTimer);
+  viewRoom.hidden = true; viewJoin.hidden = false;
+  document.title = "Autocowrecked";
+});
+
+els.drawerToggle.addEventListener("click", function(){
+  sidebarOpen = !sidebarOpen;
+  els.sidebar.classList.toggle("open", sidebarOpen);
+});
+
+updatePreview();
+setMode("join");
+})();
+</script>
