@@ -289,6 +289,7 @@ h1.join-title span{color:var(--accent);}
 </style>
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 
 <div class="scanlines"></div>
 
@@ -678,13 +679,206 @@ function timeLabel(ts){
   return h+":"+(m<10?"0":"")+m+" "+ap;
 }
 
+/* ---------------- peer-to-peer multiplayer (no server, no account) ----------------
+   Used when the Claude db capability isn't available (e.g. hosted on GitHub Pages
+   or Netlify). Whoever gets to a room code first becomes the "host"; everyone else
+   connects directly to them via PeerJS's free public broker. The host relays every
+   message to everyone (itself included), so there's one consistent order for all. */
+var PEER_PREFIX = "acwr7-";
+var peerConns = {};      // host only: networkPeerId -> DataConnection
+var peerRole = null;     // "host" | "client" | null
+var myPeerObj = null;
+var hostConn = null;     // client only: connection to the host
+
+function resetPeerState(){
+  try{ if(myPeerObj) myPeerObj.destroy(); }catch(e){}
+  peerConns = {}; peerRole = null; myPeerObj = null; hostConn = null;
+}
+
+function broadcastToAll(payload, exceptPeerId){
+  Object.keys(peerConns).forEach(function(pid){
+    if(pid === exceptPeerId) return;
+    var c = peerConns[pid];
+    if(c && c.open){ try{ c.send(payload); }catch(e){} }
+  });
+}
+
+function hostAddMessage(msg){
+  localMessages.push(msg);
+  if(localMessages.length > 60) localMessages = localMessages.slice(-60);
+  renderFeed();
+  updateDistortion(localMessages.length);
+  broadcastToAll({type:"message", msg: msg});
+}
+
+function setupHostConnection(conn){
+  var remoteMemberId = null;
+  conn.on("data", function(data){
+    if(!data || typeof data !== "object") return;
+    if(data.type === "hello"){
+      remoteMemberId = data.memberId;
+      peerConns[conn.peer] = conn;
+      localMembers[remoteMemberId] = data.profile;
+      conn.send({type:"state", members: localMembers, messages: localMessages});
+      renderRoster(); renderMembersStrip();
+      broadcastToAll({type:"roster", members: localMembers}, conn.peer);
+    } else if(data.type === "message" && remoteMemberId){
+      hostAddMessage(data.msg);
+    } else if(data.type === "ping" && remoteMemberId && localMembers[remoteMemberId]){
+      localMembers[remoteMemberId].lastSeen = Date.now();
+      broadcastToAll({type:"roster", members: localMembers});
+    }
+  });
+  conn.on("close", function(){
+    delete peerConns[conn.peer];
+    if(remoteMemberId){
+      delete localMembers[remoteMemberId];
+      renderRoster(); renderMembersStrip();
+      broadcastToAll({type:"roster", members: localMembers});
+    }
+  });
+  conn.on("error", function(){});
+}
+
+function becomeHost(code){
+  return new Promise(function(resolve){
+    var hostId = PEER_PREFIX + code;
+    var p;
+    try{ p = new Peer(hostId); }catch(e){ resolve(false); return; }
+    var settled = false;
+    p.on("open", function(){
+      if(settled) return; settled = true;
+      peerRole = "host";
+      myPeerObj = p;
+      localMembers[profile.memberId] = memberDoc();
+      renderRoster(); renderMembersStrip();
+      p.on("connection", function(conn){ setupHostConnection(conn); });
+      if(heartbeatTimer) clearInterval(heartbeatTimer);
+      heartbeatTimer = setInterval(function(){
+        if(localMembers[profile.memberId]) localMembers[profile.memberId].lastSeen = Date.now();
+        broadcastToAll({type:"roster", members: localMembers});
+      }, 10000);
+      window.__sendMessage = function(meant, sent, tag){
+        hostAddMessage({
+          authorId: profile.memberId, name: profile.name, emoji: profile.emoji,
+          color: profile.color, menaceTitle: profile.menaceTitle,
+          meant: meant, sent: sent, tag: tag, ts: Date.now()
+        });
+      };
+      window.__leaveRoom = function(){
+        broadcastToAll({type:"host-left"});
+        resetPeerState();
+      };
+      resolve(true);
+    });
+    p.on("error", function(){
+      if(settled) return; settled = true;
+      try{ p.destroy(); }catch(e){}
+      resolve(false);
+    });
+  });
+}
+
+function becomeClient(code){
+  return new Promise(function(resolve){
+    var hostId = PEER_PREFIX + code;
+    var p;
+    try{ p = new Peer(); }catch(e){ resolve(false); return; }
+    var settled = false;
+    var timer = setTimeout(function(){
+      if(settled) return; settled = true;
+      try{ p.destroy(); }catch(e){}
+      resolve(false);
+    }, 5000);
+
+    p.on("open", function(){
+      var conn = p.connect(hostId, {reliable:true});
+      conn.on("open", function(){
+        if(settled) return; settled = true;
+        clearTimeout(timer);
+        peerRole = "client";
+        myPeerObj = p;
+        hostConn = conn;
+        conn.on("data", function(data){
+          if(!data || typeof data !== "object") return;
+          if(data.type === "state"){
+            localMembers = data.members || {};
+            localMessages = data.messages || [];
+            renderRoster(); renderMembersStrip(); renderFeed(); updateDistortion(localMessages.length);
+          } else if(data.type === "roster"){
+            localMembers = data.members || {};
+            renderRoster(); renderMembersStrip();
+          } else if(data.type === "message"){
+            localMessages.push(data.msg);
+            if(localMessages.length > 60) localMessages = localMessages.slice(-60);
+            renderFeed(); updateDistortion(localMessages.length);
+          } else if(data.type === "host-left"){
+            els.offlineBanner.hidden = false;
+            els.offlineBanner.textContent = "The host left — room closed. You can keep typing, just solo now.";
+          }
+        });
+        conn.on("close", function(){
+          els.offlineBanner.hidden = false;
+          els.offlineBanner.textContent = "Connection to the room dropped — running solo now.";
+        });
+        conn.send({type:"hello", memberId: profile.memberId, profile: memberDoc()});
+        if(heartbeatTimer) clearInterval(heartbeatTimer);
+        heartbeatTimer = setInterval(function(){
+          try{ conn.send({type:"ping"}); }catch(e){}
+        }, 10000);
+        window.__sendMessage = function(meant, sent, tag){
+          conn.send({type:"message", msg:{
+            authorId: profile.memberId, name: profile.name, emoji: profile.emoji,
+            color: profile.color, menaceTitle: profile.menaceTitle,
+            meant: meant, sent: sent, tag: tag, ts: Date.now()
+          }});
+        };
+        window.__leaveRoom = function(){
+          try{ conn.send({type:"bye"}); }catch(e){}
+          resetPeerState();
+        };
+        resolve(true);
+      });
+      conn.on("error", function(){
+        if(settled) return; settled = true;
+        clearTimeout(timer);
+        try{ p.destroy(); }catch(e){}
+        resolve(false);
+      });
+    });
+    p.on("error", function(){
+      if(settled) return; settled = true;
+      clearTimeout(timer);
+      try{ p.destroy(); }catch(e){}
+      resolve(false);
+    });
+  });
+}
+
+async function tryEnterPeerRoom(code){
+  if(typeof Peer === "undefined") return false;
+  for(var attempt=0; attempt<2; attempt++){
+    var joined = await becomeClient(code);
+    if(joined) return true;
+    var hosted = await becomeHost(code);
+    if(hosted) return true;
+  }
+  return false;
+}
+
 async function enterRoom(code){
   viewJoin.hidden = true; viewRoom.hidden = false;
   els.roomCodeLabel.textContent = code;
   document.title = "Autocowrecked — #" + code;
+  els.offlineBanner.textContent = "Multiplayer link unavailable in this preview — running solo, local-only.";
 
   await dbReady;
   if(!db){
+    var peerJoined = await tryEnterPeerRoom(code);
+    if(peerJoined){
+      els.offlineBanner.hidden = true;
+      return;
+    }
     els.offlineBanner.hidden = false;
     localMembers[profile.memberId] = memberDoc();
     renderRoster();
@@ -882,9 +1076,11 @@ els.copyBtn.addEventListener("click", function(){
 
 els.leaveBtn.addEventListener("click", function(){
   if(window.__leaveRoom) window.__leaveRoom();
+  window.__sendMessage = null; window.__leaveRoom = null;
   if(unsubMsgs) unsubMsgs();
   if(unsubMembers) unsubMembers();
   if(heartbeatTimer) clearInterval(heartbeatTimer);
+  localMembers = {}; localMessages = [];
   viewRoom.hidden = true; viewJoin.hidden = false;
   document.title = "Autocowrecked";
 });
